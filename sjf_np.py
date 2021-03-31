@@ -1,99 +1,116 @@
-import multiprocessing
-import os
-import re
 import time
+from os import getppid, remove
 from random import randint
+from re import split, sub
+from threading import Thread
+from typing import NoReturn, Any, Dict, List, Tuple
 
 import numpy as np
 
 
-def worker(a):
-    print(a, "Thread worked")
-    start = time.time()
-    while start + a > time.time():
-        pass
+def worker(burstTime: float) -> NoReturn:
+    print(burstTime, "Thread worked")
+    time.sleep(burstTime)
     print("Thread stop")
 
 
-def choosing(p, s, procList):
-    _pList = procList
+def choosing(p: Tuple, students: Dict, threadlist: List) -> List:
+    _tList = threadlist
     if len(p[1]) != 3:
-        # добавляем количество свободных мест
+        # example tuple - ('Prep1', ['Dis1', 1])
+        # добавляем параметр обозначающий количество свободных мест
         p[1].append(p[1][1])
     # milliseconds
     mBurstTime = 99999999
-    pCandidateName = None
-    pCandidatePrior = None
+    pCandidateName: Any = None
+    pCandidatePrior: Any = None
 
     for i in range(0, p[1][1]):
         if p[1][2] > 0:
-            for stud in s:
-                if s[stud].get("Used") is None:
-                    if p[1][0] in s[stud]["Discipline"]:
-                        if ArrivalTime >= s[stud]["ArrivalTime"]:
-                            if pCandidatePrior is None:
-                                if s[stud]["BurstTime"] < mBurstTime:
-                                    mBurstTime = s[stud]["BurstTime"]
-                                    pCandidateName = stud
-                                    pCandidatePrior = s[stud]["Priority"]
-                            elif pCandidatePrior <= MPriority and pCandidatePrior <= s[stud]["Priority"]:
-                                if s[stud]["BurstTime"] < mBurstTime:
-                                    mBurstTime = s[stud]["BurstTime"]
-                                    pCandidateName = stud
-                                    pCandidatePrior = s[stud]["Priority"]
+            for stud in students:
+                # Set max priority for a student in case with condition below
+                if students[stud]["Priority"] > MPriority:
+                    students[stud]["Priority"] = MPriority
 
-                elif s[stud].get("Used") is not None:
-                    if s[stud]["Used"] is False:
-                        if ArrivalTime >= s[stud]["ArrivalTime"]:
-                            if p[1][0] in s[stud]["Discipline"] and p[1][0] not in s[stud]["DisciplineFinished"]:
+                if students[stud].get("Used") is None:
+                    if p[1][0] in students[stud]["Discipline"]:
+                        if ArrivalTime >= students[stud]["ArrivalTime"]:
+                            if pCandidatePrior is None:
+                                if students[stud]["BurstTime"] < mBurstTime:
+                                    mBurstTime = students[stud]["BurstTime"]
+                                    pCandidateName = stud
+                                    pCandidatePrior = students[stud]["Priority"]
+                            elif pCandidatePrior <= MPriority and pCandidatePrior == students[stud]["Priority"]:
+                                # Баг с приоритетом, и временем, bugfix
+                                if students[stud]["BurstTime"] < mBurstTime:
+                                    mBurstTime = students[stud]["BurstTime"]
+                                    pCandidateName = stud
+                                    pCandidatePrior = students[stud]["Priority"]
+                            elif pCandidatePrior <= MPriority and pCandidatePrior < students[stud]["Priority"]:
+                                mBurstTime = students[stud]["BurstTime"]
+                                pCandidateName = stud
+                                pCandidatePrior = students[stud]["Priority"]
+
+                elif students[stud].get("Used") is not None:
+                    if students[stud]["Used"] is False:
+                        if ArrivalTime >= students[stud]["ArrivalTime"]:
+                            if p[1][0] in students[stud]["Discipline"] and p[1][0] not in students[stud]["DisciplineFinished"]:
                                 if pCandidatePrior is None:
-                                    if s[stud]["BurstTime"] < mBurstTime:
-                                        mBurstTime = s[stud]["BurstTime"]
+                                    if students[stud]["BurstTime"] < mBurstTime:
+                                        mBurstTime = students[stud]["BurstTime"]
                                         pCandidateName = stud
-                                        pCandidatePrior = s[stud]["Priority"]
-                                elif pCandidatePrior <= MPriority and pCandidatePrior <= s[stud]["Priority"]:
-                                    if s[stud]["BurstTime"] < mBurstTime:
-                                        mBurstTime = s[stud]["BurstTime"]
+                                        pCandidatePrior = students[stud]["Priority"]
+                                elif pCandidatePrior <= MPriority and pCandidatePrior == students[stud]["Priority"]:
+                                    if students[stud]["BurstTime"] < mBurstTime:
+                                        mBurstTime = students[stud]["BurstTime"]
                                         pCandidateName = stud
-                                        pCandidatePrior = s[stud]["Priority"]
+                                        pCandidatePrior = students[stud]["Priority"]
+                                elif pCandidatePrior <= MPriority and pCandidatePrior < students[stud]["Priority"]:
+                                    mBurstTime = students[stud]["BurstTime"]
+                                    pCandidateName = stud
+                                    pCandidatePrior = students[stud]["Priority"]
             if pCandidateName is not None:
-                s[pCandidateName]["Used"] = True
-                # _pList.append(f"{pCandidateName}.{s[pCandidateName]['Group']}.{p[1][0]}")
-                _pList.append(multiprocessing.Process(target=worker, args=(s[pCandidateName]["BurstTime"] / 1000.0,),
-                                                      name=f"{pCandidateName}.{s[pCandidateName]['Group']}.{p[1][0]}"))
+                students[pCandidateName]["Used"] = True
+                # _tList.append(f"{pCandidateName}.{s[pCandidateName]['Group']}.{p[1][0]}")
+                _tList.append(Thread(target=worker, args=(students[pCandidateName]["BurstTime"] / 1000.0,),
+                                     name=f"{pCandidateName}.{students[pCandidateName]['Group']}.{p[1][0]}"))
+                # part petri net
                 p[1][2] -= 1
                 pCandidateName = None
                 pCandidatePrior = None
-    return _pList
+    return _tList
 
 
-def logger(quantNumber, thList, studDict, of):
-    PPID = os.getppid()
-    print(f"Номер кванта - {quantNumber}", file=of)
+def logger(quantNumber: float, threadlist: List, students: Dict, of, times) -> NoReturn:
+    PPID: int = getppid()
+    print(f"Номер кванта - {quantNumber}, {times}", file=of)
     usedStudent = set()
-    for proc in thList:
-        _studname, _studgroup, _studdis = re.split("\.", proc.name)
+
+    for th in threadlist:
+        _studname, _studgroup, _studdis = split("\.", th.name)
         usedStudent.add(_studname)
-        print(f"Студент - {_studname} группа {_studgroup} сдает дисциплину {_studdis}, PID - {proc.pid}, Parent PID - {PPID}", file=of)
-    for _stud in studDict:
+        # th.pid
+        # if studDict[_studname]["LT"] != 999:
+        print(f"Студент - {_studname} группа {_studgroup} сдает дисциплину {_studdis}, TID - {th.ident}, Parent PID - {PPID}", file=of)
+    for _stud in students:
         if _stud not in usedStudent:
-            if studDict[_stud].get("Used") is None:
-                if ArrivalTime >= studDict[_stud]["ArrivalTime"]:
-                    print(f"Студент - {_stud} группа {studDict[_stud]['Group']} готов к сдаче дисциплин, но ожидает очереди", file=of)
+            if students[_stud].get("Used") is None:
+                if ArrivalTime >= students[_stud]["ArrivalTime"]:
+                    print(f"Студент - {_stud} группа {students[_stud]['Group']} готов к сдаче дисциплин, но ожидает очереди", file=of)
                 else:
-                    print(f"Студент - {_stud} группа {studDict[_stud]['Group']} ещё не прибыл на сдачу дисциплин", file=of)
-            elif studDict[_stud].get("Used") is not None:
-                if studDict[_stud]["Used"] is False:
-                    if len(studDict[_stud]["Discipline"]) == len(studDict[_stud]["DisciplineFinished"]):
-                        print(f"Студент - {_stud} группа {studDict[_stud]['Group']} закончил сдачу всех дисциплин", file=of)
-                    elif len(studDict[_stud]["Discipline"]) != len(studDict[_stud]["DisciplineFinished"]):
-                        for d in studDict[_stud]["Discipline"]:
-                            if d not in studDict[_stud]["DisciplineFinished"]:
-                                print(f"Студент - {_stud} группа {studDict[_stud]['Group']} ожидает сдачу дисциплины {d}", file=of)
+                    print(f"Студент - {_stud} группа {students[_stud]['Group']} ещё не прибыл на сдачу дисциплин", file=of)
+            elif students[_stud].get("Used") is not None:
+                if students[_stud]["Used"] is False:
+                    if len(students[_stud]["Discipline"]) == len(students[_stud]["DisciplineFinished"]):
+                        print(f"Студент - {_stud} группа {students[_stud]['Group']} закончил сдачу всех дисциплин", file=of)
+                    elif len(students[_stud]["Discipline"]) != len(students[_stud]["DisciplineFinished"]):
+                        for d in students[_stud]["Discipline"]:
+                            if d not in students[_stud]["DisciplineFinished"]:
+                                print(f"Студент - {_stud} группа {students[_stud]['Group']} ожидает сдачу дисциплины {d}", file=of)
     del usedStudent
 
 
-def read_data(of, fname='input.txt'):
+def read_data(of, fname='input.txt') -> Tuple:
     '''
     The func is reading data from input.txt file.
     If some data was omitted then they will be generated.
@@ -206,8 +223,8 @@ if __name__ == '__main__':
     #     Student = json.load(ifstream)
     #
 
-    print(Professors, "Professors")
-    print(Students, "Student")
+    # print(Professors, "Professors")
+    # print(Students, "Student")
     # в цикле для каждого препода проверяем наличие места у него и в случае его наличия делаем следующее
     # проверяем занят ли студент каким либо другим преподом
     # если не занят, то проверяем наличие необходимой для препода дисциплины
@@ -216,6 +233,7 @@ if __name__ == '__main__':
     #
     #
     #
+
     StartTime = 0
     QTimeDiff = 0
     ProcessingStudents = set()
@@ -230,46 +248,53 @@ if __name__ == '__main__':
             p.start()
 
             if StartTime == 0:
-                StartTime = time.time()
+                StartTime = round(time.time(), 2)
                 QTimeDiff = StartTime
-                ArrivalTime = round((time.time() - StartTime), 3) * 1000
+                ArrivalTime = (round(time.time(), 2) - StartTime) * 1000
 
             pRunList.append(p)
             pList.remove(p)
+
         for r in pRunList:
             if r.is_alive() is False:
-                _tmp_thread_info = re.split("\.", r.name)
+                _tmp_thread_info = split("\.", r.name)
                 Students[_tmp_thread_info[0]]["Used"] = False
                 if Students[_tmp_thread_info[0]].get("DisciplineFinished") is None:
                     Students[_tmp_thread_info[0]]["DisciplineFinished"] = [_tmp_thread_info[2]]
                 else:
                     Students[_tmp_thread_info[0]]["DisciplineFinished"].append(_tmp_thread_info[2])
+                # Petri net
                 for prof in Professors:
                     if Professors[prof][0] == _tmp_thread_info[2]:
                         Professors[prof][2] += 1
                 pRunList.remove(r)
-        if time.time() - QTimeDiff >= QTime / 1000.0:
-            # print("Quant warning!!!")
-            # print(ArrivalTime, "Arrival")
-            ArrivalTime += round((time.time() - QTimeDiff), 3) * 1000
-            QuantNumber += 1
-            logger(QuantNumber, pRunList, Students, of)
-            QTimeDiff = time.time()
+
         for k in Students:
             if Students[k].get("DisciplineFinished") is not None:
                 if len(Students[k]["Discipline"]) == len(Students[k]["DisciplineFinished"]):
                     # print(Students[k]["Discipline"], " - ", Students[k]["DisciplineFinished"], Students)
                     if Students[k]["Used"] is False and k not in ProcessingStudents:
                         ProcessingStudents.add(k)
-        if len(ProcessingStudents) == len(Professors):
-            totalTime = round(time.time() - StartTime, 4)
+
+        # bugfix
+        if len(ProcessingStudents) == len(Students):
+            QuantNumber += 1
+            totalTime = round(time.time() - StartTime, 3)
+            logger(QuantNumber, pRunList, Students, of, totalTime)
             print(f"Total time - {totalTime}")
             of.close()
             break
 
+        c_time = round(time.time(), 2)
+        if c_time - QTimeDiff >= round(QTime / 1000.0, 2):
+            ArrivalTime += round(c_time - QTimeDiff, 2) * 1000
+            QuantNumber += 1
+            logger(QuantNumber, pRunList, Students, of, c_time)
+            QTimeDiff = round(time.time(), 2)
+
     with open("_tmp_output.txt", "r", encoding="UTF-8") as tmpstream:
         _output = tmpstream.read()
-        _output = re.sub("STOP", str(totalTime), _output)
+        _output = sub("STOP", str(totalTime), _output)
         with open("output.txt", "w+", encoding="UTF-8") as outstream:
             outstream.write(_output)
-    os.remove("_tmp_output.txt")
+    remove("_tmp_output.txt")

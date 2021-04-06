@@ -2,16 +2,16 @@ import time
 from os import getppid, remove
 from random import randint
 from re import split, sub
-from threading import Thread
+from threading import Thread, current_thread
 from typing import NoReturn, Any, Dict, List, Tuple
 
 import numpy as np
 
 
 def worker(burstTime: float) -> NoReturn:
-    print(burstTime, "Thread worked")
+    print(space, burstTime, space, "Thread worked", space, current_thread().name)
     time.sleep(burstTime)
-    print("Thread stop")
+    print(space, burstTime, space, "Thread stop", space, "  ", current_thread().name)
 
 
 def choosing(p: Tuple, students: Dict, threadlist: List) -> List:
@@ -83,7 +83,7 @@ def choosing(p: Tuple, students: Dict, threadlist: List) -> List:
 
 def logger(quantNumber: float, threadlist: List, students: Dict, of, times) -> NoReturn:
     PPID: int = getppid()
-    print(f"Номер кванта - {quantNumber}, {times}", file=of)
+    print(f"Номер кванта - {quantNumber}, Текущей unixtime - {times}", file=of)
     usedStudent = set()
 
     for th in threadlist:
@@ -239,22 +239,24 @@ if __name__ == '__main__':
     ProcessingStudents = set()
     QuantNumber = 0
     ArrivalTime = 0
+    space = " " * 6
+    print(f"Time sleep in ms |{space}Status{space}| Thread name")
     while True:
         for i in Professors:
             a = choosing((i, Professors[i]), Students, pList)
             pList = a
 
         for p in pList:
-            p.start()
 
             if StartTime == 0:
                 StartTime = round(time.time(), 2)
-                QTimeDiff = StartTime
-                ArrivalTime = (round(time.time(), 2) - StartTime) * 1000
+                QTimeDiff = StartTime + (QTime / 1000.0)
+
+            p.start()
 
             pRunList.append(p)
-            pList.remove(p)
-
+            # pList.remove(p)
+        pList.clear()
         for r in pRunList:
             if r.is_alive() is False:
                 _tmp_thread_info = split("\.", r.name)
@@ -286,11 +288,11 @@ if __name__ == '__main__':
             break
 
         c_time = round(time.time(), 2)
-        if c_time - QTimeDiff >= round(QTime / 1000.0, 2):
-            ArrivalTime += round(c_time - QTimeDiff, 2) * 1000
+        if c_time >= QTimeDiff:
+            QTimeDiff = c_time + (QTime / 1000.0)
+            ArrivalTime += QTime
             QuantNumber += 1
             logger(QuantNumber, pRunList, Students, of, c_time)
-            QTimeDiff = round(time.time(), 2)
 
     with open("_tmp_output.txt", "r", encoding="UTF-8") as tmpstream:
         _output = tmpstream.read()

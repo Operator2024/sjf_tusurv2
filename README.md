@@ -30,8 +30,8 @@ more preferable than has the current student.
 
 ## Output files
 
-1. [Output file for preemptive SJF](output/output_preemptive.txt)
-1. [Output file for non-preemptive SJF](output/output_nonpreemptive.txt)
+1. [Output file for preemptive SJF](output/output.txt)
+1. [Output file for non-preemptive SJF](output/output.txt)
 
 ## License
 
